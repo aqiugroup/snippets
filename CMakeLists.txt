@@ -18,5 +18,6 @@ find_package(Threads REQUIRED)
 include_directories(${CMAKE_SOURCE_DIR}/common)
 add_subdirectory(common)
 
+add_subdirectory(cpp)
 add_subdirectory(opencv)
 add_subdirectory(eigen)

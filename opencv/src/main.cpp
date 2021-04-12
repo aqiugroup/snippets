@@ -1,12 +1,13 @@
 #include "img.h"
 // #include <cstdlib>
 #include "ransac.h"
+#include "kdtree.h"
 
-int main()
+int main(int argc, char **argv)
 {
     // ReadAndDisplayImage();
     // MyCalHist();
-    // ransac
+    // 1 ransac
     int n = 5;
     vector<Point2D> pts{{3, 4}, {6, 8}, {9, 12}, {15, 20}, {10, -10}};
     auto params = Ransaclr(pts, 0.1, 1e-4, 10.0);
@@ -22,6 +23,14 @@ int main()
         }
     }
     printf("%f\n", sum / (double)NUM);
+    // 2 TestKdtree
+    if (argc > 1) {
+        const int seed = std::stoi(argv[1]);
+        TestKdtree(seed);
+    } else {
+        printf("!!!!please input seed for TestKdtree !!!!\n");
+        // TestKdtree();
+    }
     return 0;
 }
 
