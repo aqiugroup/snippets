@@ -3,7 +3,7 @@
 #include <list>
 #include <vector>
 #include <chrono>
-using namespace std; 
+using namespace std;
 
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
@@ -19,18 +19,18 @@ int main( int argc, char** argv )
     }
     string path_to_dataset = argv[1];
     string associate_file = path_to_dataset + "/associate.txt";
-    
+
     ifstream fin( associate_file );
     if ( !fin ) 
     {
-        cerr<<"I cann't find associate.txt!"<<endl;
+        cerr<<"I cann't find associate.txt! : " << associate_file.c_str() <<endl;
         return 1;
     }
-    
+
     string rgb_file, depth_file, time_rgb, time_depth;
     list< cv::Point2f > keypoints;      // 因为要删除跟踪失败的点，使用list
     cv::Mat color, depth, last_color;
-    
+
     for ( int index=0; index<100; index++ )
     {
         fin>>time_rgb>>rgb_file>>time_depth>>depth_file;

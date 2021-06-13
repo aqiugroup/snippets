@@ -40,6 +40,7 @@ int main ( int argc, char** argv )
     vector<KeyPoint> keypoints_1, keypoints_2;
     vector<DMatch> matches;
     find_feature_matches ( img_1, img_2, keypoints_1, keypoints_2, matches );
+    cout<<"keypoints_1.size() "<<keypoints_1.size() << " keypoints_2.size() "<<keypoints_2.size()<<endl;
     cout<<"一共找到了"<<matches.size() <<"组匹配点"<<endl;
 
     //-- 估计两张图像间运动
@@ -150,7 +151,7 @@ void pose_estimation_2d2d ( std::vector<KeyPoint> keypoints_1,
 
     //-- 计算基础矩阵
     Mat fundamental_matrix;
-    fundamental_matrix = findFundamentalMat ( points1, points2, CV_FM_8POINT );
+    fundamental_matrix = findFundamentalMat ( points1, points2, CV_FM_8POINT ); // opencv lib function
     cout<<"fundamental_matrix is "<<endl<< fundamental_matrix<<endl;
 
     //-- 计算本质矩阵

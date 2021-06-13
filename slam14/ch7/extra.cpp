@@ -181,6 +181,7 @@ int recoverPose( InputArray E, InputArray _points1, InputArray _points2, OutputA
 
 cv::Mat findEssentialMat( InputArray _points1, InputArray _points2, double focal, Point2d pp)
 {
+    std::cout << " !!! fx " << focal << " cx " << pp.x << std::endl;
     Mat cameraMatrix = (Mat_<double>(3,3) << focal, 0, pp.x, 0, focal, pp.y, 0, 0, 1);
     
     Mat points1, points2;

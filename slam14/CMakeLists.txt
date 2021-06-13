@@ -42,6 +42,8 @@ add_subdirectory(ch5/imageBasics)
 add_subdirectory(ch6/ceres_curve_fitting)
 add_subdirectory(ch6/g2o_curve_fitting)
 add_subdirectory(ch7)
+add_subdirectory(ch8/directMethod)
+add_subdirectory(ch8/LKFlow)
 
 
 
