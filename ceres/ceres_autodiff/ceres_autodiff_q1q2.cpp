@@ -79,6 +79,7 @@ public:
     }
   }
 
+  // 右扰动
   static bool GlobalToLocal(const double *x, double *jacobian) {
     const double qw = x[3];
     const double qx = x[0];

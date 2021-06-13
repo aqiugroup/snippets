@@ -24,3 +24,6 @@ target_link_libraries( ceres_autodiff_correct ${CERES_LIBRARIES} ${OpenCV_LIBS} 
 
 add_executable( ceres_autodiff_q1q2 ceres_autodiff_q1q2.cpp )
 target_link_libraries( ceres_autodiff_q1q2 ${CERES_LIBRARIES} ${OpenCV_LIBS} )
+
+add_executable( ceres_autodiff_lidar_visual_fusion ceres_autodiff_lidar_visual_fusion.cpp )
+target_link_libraries( ceres_autodiff_lidar_visual_fusion ${CERES_LIBRARIES} ${OpenCV_LIBS} )
