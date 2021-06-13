@@ -1,6 +1,6 @@
 aux_source_directory(. EXECUTABLE)
 set(CMAKE_BUILD_TYPE Debug)
-
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g")
 
 aux_source_directory(src DIR_SRCS)
 add_executable(

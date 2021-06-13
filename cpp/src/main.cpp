@@ -1,8 +1,13 @@
 #include "StdLib.h"
+#include "virtual.h"
 
 int main()
 {
-    test_nth_element();
+	// stdlib
+    // test_nth_element();
+
+    // virtual
+    TestChildNoVirtual();
     return 0;
 }
 
