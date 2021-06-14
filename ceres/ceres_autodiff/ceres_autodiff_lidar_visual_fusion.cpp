@@ -7,7 +7,9 @@
 
 // goal : use numeric diff and auto diff to check my analytic diff.
 // requirement : eigen>3.3.5 ceres==1.14.0
-// target function : q_LI * q_Il1_Ir * q_Il2_Ir.conjugate() * q_LI.conjugate()
+// target function :
+//            deltaQ = q_LI * q_Il1_Ir * q_Il2_Ir.conjugate() * q_LI.conjugate();
+//            deltaP = q_LI * (q_Il1_Ir * (p_Ir_Il2 - p_Ir_Il1)) + p_LI - q_L1_L2_pred * p_LI;
 
 class QuaternionCostFunctor {
 public:
@@ -16,10 +18,13 @@ public:
     q_LI_(_q_LI), p_LI_(_p_LI), q_L1_L2_meas_(_q_L1_L2_meas), p_L1_L2_meas_(_p_L1_L2_meas) {}
 
   template <typename T>
-  bool operator()(const T *const _q_Il1_Ir, const T *const _q_Il2_Ir,
+  bool operator()(const T *const _q_Il1_Ir, const T *const _p_Ir_Il1,
+                  const T *const _q_Il2_Ir, const T *const _p_Ir_Il2,
                   T *_e) const {
     const Eigen::Quaternion<T> q_Il1_Ir(_q_Il1_Ir);
     const Eigen::Quaternion<T> q_Il2_Ir(_q_Il2_Ir);
+    const Eigen::Matrix<T, 3, 1> p_Ir_Il1(_p_Ir_Il1);
+    const Eigen::Matrix<T, 3, 1> p_Ir_Il2(_p_Ir_Il2);
 
     const Eigen::Quaternion<T> q_LI(
         static_cast<T>(q_LI_.w()), static_cast<T>(q_LI_.x()),
@@ -36,46 +41,100 @@ public:
 
 
     const Eigen::Quaternion<T> q_L1_L2_pred = q_LI * q_Il1_Ir * q_Il2_Ir.conjugate() * q_LI.conjugate();
-    // const Eigen::Matrix<T, 3, 1> p_L1_L2_pred = q_LI * (q_Il1_Ir * (p_Ir_Il2 - p_Ir_Il1)) + p_LI - q_L1_L2_pred * p_LI;
+    const Eigen::Matrix<T, 3, 1> p_L1_L2_pred = q_LI * (q_Il1_Ir * (p_Ir_Il2 - p_Ir_Il1)) + p_LI - q_L1_L2_pred * p_LI;
 
     const Eigen::Quaternion<T> e_q = q_L1_L2_pred * q_L1_L2_meas.inverse();
     const Eigen::AngleAxis<T> e_aa(e_q);
-    Eigen::Map<Eigen::Matrix<T, 3, 1>> e(_e);
-    e = e_aa.axis() * e_aa.angle();
+    Eigen::Matrix<T, 3, 1> e_q_delta = e_aa.axis() * e_aa.angle();
+    Eigen::Map<Eigen::Matrix<T, 6, 1>> e(_e);
+    // e.block<0, 0, 3, 1> = e_q_delta;
+    e(0) = e_q_delta(0);
+    e(1) = e_q_delta(1);
+    e(2) = e_q_delta(2);
+
+    Eigen::Matrix<T, 3, 1> e_p = p_L1_L2_pred - p_L1_L2_meas;
+    // e.block<3, 0, 3, 1> = e_p;
+    e(3) = e_p(0);
+    e(4) = e_p(1);
+    e(5) = e_p(2);
 
     return true;
   }
 
-  void evaluateAnalytically(const double *const _q_Il1_Ir,
-                            const double *const _q_Il2_Ir,
+  void evaluateAnalytically(const double *const _q_Il1_Ir, const double *const _p_Ir_Il1,
+                            const double *const _q_Il2_Ir, const double *const _p_Ir_Il2,
                             double *_e,
                             double **_jacobians) const {
     const Eigen::Quaternion<double> q_Il1_Ir(_q_Il1_Ir);
     const Eigen::Quaternion<double> q_Il2_Ir(_q_Il2_Ir);
+    const Eigen::Matrix<double, 3, 1> p_Ir_Il1(_p_Ir_Il1);
+    const Eigen::Matrix<double, 3, 1> p_Ir_Il2(_p_Ir_Il2);
 
     const Eigen::Quaterniond q_LI = q_LI_;
     const Eigen::Vector3d p_LI = p_LI_;
 
     const Eigen::Quaterniond q_L1_L2_pred = q_LI * q_Il1_Ir * q_Il2_Ir.conjugate() * q_LI.conjugate();
-    // Eigen::Vector3d p_L1_L2_pred = q_LI * (q_Il1_Ir * (p_Ir_Il2 - p_Ir_Il1)) + p_LI - q_L1_L2_meas * p_LI;
+    Eigen::Vector3d p_L1_L2_pred = q_LI * (q_Il1_Ir * (p_Ir_Il2 - p_Ir_Il1)) + p_LI - q_L1_L2_pred * p_LI;
 
     const Eigen::Quaternion<double> e_q = q_L1_L2_pred * q_L1_L2_meas_.inverse();
     const Eigen::AngleAxis<double> e_aa(e_q);
-    Eigen::Map<Eigen::Matrix<double, 3, 1>> e(_e);
-    e = e_aa.axis() * e_aa.angle();
+    Eigen::Matrix<double, 3, 1> e_q_delta = e_aa.axis() * e_aa.angle();
+    Eigen::Map<Eigen::Matrix<double, 6, 1>> e(_e);
+    // e.block<0, 0, 3, 1> = e_q_delta;
+    e(0) = e_q_delta(0);
+    e(1) = e_q_delta(1);
+    e(2) = e_q_delta(2);
+
+    const Eigen::Matrix<double, 3, 1> e_p = p_L1_L2_pred-p_L1_L2_meas_;
+    // e.block<3, 0, 3, 1> = e_p;
+    e(3) = e_p(0);
+    e(4) = e_p(1);
+    e(5) = e_p(2);
 
     if (_jacobians != nullptr) {
-      if (_jacobians[0] != nullptr) { /// q_Il1_Ir
+      if (_jacobians[0] != nullptr) { // deltaQ to q_Il1_Ir
         Eigen::Map<Eigen::Matrix<double, 3, 4, Eigen::RowMajor>> J(
             _jacobians[0]);
         J.setZero();
-        J.block(0, 0, 3, 3) = q_LI_.toRotationMatrix();
+        J.block(0, 0, 3, 3) = q_LI.toRotationMatrix();
       }
-      if (_jacobians[1] != nullptr) { /// q_Il2_Ir
+      if (_jacobians[0]+12 != nullptr) { // deltaP to q_Il1_Ir
         Eigen::Map<Eigen::Matrix<double, 3, 4, Eigen::RowMajor>> J(
-            _jacobians[1]);
+            _jacobians[0]+12);
         J.setZero();
-        J.block(0, 0, 3, 3) = -(q_LI_ * q_Il1_Ir * q_Il2_Ir.conjugate()).toRotationMatrix();
+        J.block(0, 0, 3, 3) = q_LI.matrix() * (-skew(q_Il1_Ir.matrix() * (p_Ir_Il2 - p_Ir_Il1))) +
+                              skew(q_L1_L2_pred.matrix() * p_LI.matrix()) * q_LI.matrix();
+      }
+
+
+      if (_jacobians[1]+9 != nullptr) { // deltaP to p_Ir_Il1
+        Eigen::Map<Eigen::Matrix<double, 3, 3, Eigen::RowMajor>> J(
+            _jacobians[1]+9);
+        J.setZero();
+        J.block(0, 0, 3, 3) = -(q_LI * q_Il1_Ir).matrix();
+      }
+
+
+      if (_jacobians[2] != nullptr) { // deltaQ to q_Il2_Ir
+        Eigen::Map<Eigen::Matrix<double, 3, 4, Eigen::RowMajor>> J(
+            _jacobians[2]);
+        J.setZero();
+        J.block(0, 0, 3, 3) = -(q_LI * q_Il1_Ir * q_Il2_Ir.conjugate()).toRotationMatrix();
+      }
+      if (_jacobians[2]+12 != nullptr) { // deltaP to q_Il2_Ir
+        Eigen::Map<Eigen::Matrix<double, 3, 4, Eigen::RowMajor>> J(
+            _jacobians[2]+12);
+        J.setZero();
+        J.block(0, 0, 3, 3) = -skew(q_L1_L2_pred.matrix() * p_LI) *
+                              (q_LI * q_Il1_Ir * q_Il2_Ir.conjugate()).matrix();
+      }
+
+
+      if (_jacobians[3]+9 != nullptr) { // deltaP to p_Ir_Il2
+        Eigen::Map<Eigen::Matrix<double, 3, 3, Eigen::RowMajor>> J(
+            _jacobians[3]+9);
+        J.setZero();
+        J.block(0, 0, 3, 3) = (q_LI * q_Il1_Ir).matrix();
       }
     }
   }
@@ -93,6 +152,9 @@ public:
     return true;
   }
 
+  // 0 -v3 v2
+  // v3 0 -v1
+  // -v2 v1 0
   static inline Eigen::Matrix3d skew(const Eigen::Vector3d &_v) {
     Eigen::Matrix3d res;
     res.setZero();
@@ -191,6 +253,7 @@ int main(int argc, char **argv) {
   Eigen::Vector3d p_LI = Eigen::Vector3d(std::rand() / double(RAND_MAX) * 2 * range + (-range),
                                           std::rand() / double(RAND_MAX) * 2 * range + (-range),
                                           std::rand() / double(RAND_MAX) * 2 * range + (-range));
+  std::cout << "q_LI:\n " << q_LI.matrix() << std::endl;
 
   Eigen::Quaterniond q_Il1_Ir = getRandomQuaternion();
   Eigen::Quaterniond q_Il2_Ir = getRandomQuaternion();
@@ -212,99 +275,211 @@ int main(int argc, char **argv) {
 
   QuaternionCostFunctor functor(q_LI, p_LI, q_L1_L2_meas, p_L1_L2_meas);
 
-  double residuals[3];
-  double *parameters[2] = {q_Il1_Ir.coeffs().data(), q_Il2_Ir.coeffs().data()};
-  double **jacobians = new double *[2];
-  for (int i = 0; i < 2; ++i)
-    jacobians[i] = new double[12];
+  constexpr int RESIDUAL_NUM = 6; // delta_q : 3 + delta_p : 3
+  double residuals[RESIDUAL_NUM];
+  double *parameters[4] = {q_Il1_Ir.coeffs().data(), p_Ir_Il1.data(),
+                           q_Il2_Ir.coeffs().data(), p_Ir_Il2.data()};
+  double **jacobians = new double *[4];
+  jacobians[0] = new double[24]; // 0-11: deltaQ to q_Il1_Ir 12-23: deltaP to q_Il1_Ir
+  jacobians[1] = new double[18]; // 0-08: deltaQ to p_Ir_Il1 09-17: deltaP to p_Ir_Il1
+  jacobians[2] = new double[24]; // 0-11: deltaQ to q_Il2_Ir 12-23: deltaP to q_Il2_Ir
+  jacobians[3] = new double[18]; // 0-08: deltaQ to p_Ir_Il2 09-17: deltaP to p_Ir_Il2
 
   {
-    std::cout << "----------------------------------------\n";
-    ceres::internal::AutoDiff<QuaternionCostFunctor, double, 4, 4
+    std::cout << "-----------------autodiff-----------------------\n";
+    ceres::internal::AutoDiff<QuaternionCostFunctor, double, 4, 3, 4, 3
                               >::Differentiate(functor, parameters,
-                                                3, /// residual num
+                                                RESIDUAL_NUM, /// residual num
                                                 residuals, jacobians);
+    std::cout <<"rediduals ";
+    for (int i = 0; i < RESIDUAL_NUM; ++i) {
+      std::cout << residuals[i] << " ";
+    }
+    std::cout << std::endl;
+    // Eigen::Map<Eigen::Matrix<double, 6, 4, Eigen::RowMajor>> jac0(
+    //     jacobians[0]);
+    // std::cout << "jac0\n " << jac0 << std::endl;
+    // Eigen::Map<Eigen::Matrix<double, 3, 4, Eigen::RowMajor>> jac0_0(
+    //     jacobians[0]);
+    // std::cout << "jac0_0\n " << jac0_0 << std::endl;
+    // Eigen::Map<Eigen::Matrix<double, 3, 4, Eigen::RowMajor>> jac0_1(
+    //     jacobians[0]+12);
+    // std::cout << "jac0_1\n " << jac0_1 << std::endl;
+    // Eigen::Map<Eigen::Matrix<double, 6, 3, Eigen::RowMajor>> jac1(
+    //     jacobians[1]);
+    // std::cout << "jac[1]\n " << jac1 << std::endl;
 
+    // deltaQ to q_Il1_Ir
     Eigen::Map<Eigen::Matrix<double, 3, 4, Eigen::RowMajor>> jacobian_0(
         jacobians[0]);
-
     Eigen::Matrix<double, 4, 3, Eigen::RowMajor> global_to_local_0;
     QuaternionCostFunctor::GlobalToLocal(parameters[0],
                                          global_to_local_0.data());
-
     std::cout << "autodiff jacobian_0:\n"
               << 0.5 * jacobian_0 * global_to_local_0 << std::endl;
-
+    // deltaP to q_Il1_Ir
     Eigen::Map<Eigen::Matrix<double, 3, 4, Eigen::RowMajor>> jacobian_1(
-        jacobians[1]);
-
-    Eigen::Matrix<double, 4, 3, Eigen::RowMajor> global_to_local_1;
-    QuaternionCostFunctor::GlobalToLocal(parameters[1],
-                                         global_to_local_1.data());
-
+        jacobians[0]+12);
     std::cout << "autodiff jacobian_1:\n"
-              << 0.5 * jacobian_1 * global_to_local_1 << std::endl;
+              << 0.5 * jacobian_1 * global_to_local_0 << std::endl;
+
+
+    // deltaP to p_Ir_Il1
+    Eigen::Map<Eigen::Matrix<double, 3, 3, Eigen::RowMajor>> jacobian_3(
+        jacobians[1]+9);
+    std::cout << "autodiff jacobian_3:\n" << jacobian_3 << std::endl;
+
+
+    // deltaQ to q_Il2_Ir
+    Eigen::Map<Eigen::Matrix<double, 3, 4, Eigen::RowMajor>> jacobian_4(
+        jacobians[2]);
+    Eigen::Matrix<double, 4, 3, Eigen::RowMajor> global_to_local_1;
+    QuaternionCostFunctor::GlobalToLocal(parameters[2],
+                                         global_to_local_1.data());
+    std::cout << "autodiff jacobian_4:\n"
+              << 0.5 * jacobian_4 * global_to_local_1 << std::endl;
+    // deltaP to q_Il2_Ir
+    Eigen::Map<Eigen::Matrix<double, 3, 4, Eigen::RowMajor>> jacobian_5(
+        jacobians[2]+12);
+    std::cout << "autodiff jacobian_5:\n"
+              << 0.5 * jacobian_5 * global_to_local_1 << std::endl;
+
+
+    // deltaP to p_Ir_Il2
+    Eigen::Map<Eigen::Matrix<double, 3, 3, Eigen::RowMajor>> jacobian_7(
+        jacobians[3]+9);
+    std::cout << "autodiff jacobian_7:\n" << jacobian_7 << std::endl;
   }
 
   {
-    std::cout << "----------------------------------------\n";
+    std::cout << "---------------numdiff-------------------------\n";
+    constexpr int BLOCK_INDEX = 0;
+    constexpr int BLOCK_SIZE = 4; // 扰动变量的维度
     ceres::internal::NumericDiff<
-        QuaternionCostFunctor, ceres::NumericDiffMethodType::CENTRAL, 3, 4, 4,
-        0, 0, 0, 0, 0, 0, 0, 0, 0,
-        4>::EvaluateJacobianForParameterBlock(&functor, residuals,
+        QuaternionCostFunctor, ceres::NumericDiffMethodType::CENTRAL, 6, 4, 3,
+        4, 3, 0, 0, 0, 0, 0, 0, BLOCK_INDEX,
+        BLOCK_SIZE>::EvaluateJacobianForParameterBlock(&functor, residuals,
                                               ceres::NumericDiffOptions(),
-                                              3, /// residual num
-                                              0, /// block index
-                                              4, /// block size
-                                              parameters, jacobians[0]);
-
+                                              6, /// residual num
+                                              BLOCK_INDEX, /// block index
+                                              BLOCK_SIZE, /// block size
+                                              parameters, jacobians[BLOCK_INDEX]);
+    // deltaQ to q_Il1_Ir
     Eigen::Map<Eigen::Matrix<double, 3, 4, Eigen::RowMajor>> jacobian_0(
-        jacobians[0]);
-
+        jacobians[BLOCK_INDEX]);
     Eigen::Matrix<double, 4, 3, Eigen::RowMajor> global_to_local_0;
     QuaternionCostFunctor::GlobalToLocal(parameters[0],
                                          global_to_local_0.data());
-
     std::cout << "numdiff jacobian_0:\n"
               << 0.5 * jacobian_0 * global_to_local_0 << std::endl;
-  }
-
-  {
-    ceres::internal::NumericDiff<
-        QuaternionCostFunctor, ceres::NumericDiffMethodType::CENTRAL, 3, 4, 4,
-        0, 0, 0, 0, 0, 0, 0, 0, 1,
-        4>::EvaluateJacobianForParameterBlock(&functor, residuals,
-                                              ceres::NumericDiffOptions(),
-                                              3, /// residual num
-                                              1, /// block index
-                                              4, /// block size
-                                              parameters, jacobians[1]);
-
+    // deltaP to q_Il1_Ir
     Eigen::Map<Eigen::Matrix<double, 3, 4, Eigen::RowMajor>> jacobian_1(
-        jacobians[1]);
-
-    Eigen::Matrix<double, 4, 3, Eigen::RowMajor> global_to_local_1;
-    QuaternionCostFunctor::GlobalToLocal(parameters[1],
-                                         global_to_local_1.data());
-
+        jacobians[BLOCK_INDEX]+12);
     std::cout << "numdiff jacobian_1:\n"
-              << 0.5 * jacobian_1 * global_to_local_1 << std::endl;
+              << 0.5 * jacobian_1 * global_to_local_0 << std::endl;
   }
 
   {
-    functor.evaluateAnalytically(parameters[0], parameters[1],
+    // deltaP to p_Ir_Il1
+    constexpr int BLOCK_INDEX = 1;
+    constexpr int BLOCK_SIZE = 3; // 扰动变量的维度
+    ceres::internal::NumericDiff<
+        QuaternionCostFunctor, ceres::NumericDiffMethodType::CENTRAL, 6, 4, 3,
+        4, 3, 0, 0, 0, 0, 0, 0, BLOCK_INDEX,
+        BLOCK_SIZE>::EvaluateJacobianForParameterBlock(&functor, residuals,
+                                              ceres::NumericDiffOptions(),
+                                              6, /// residual num
+                                              BLOCK_INDEX, /// block index
+                                              BLOCK_SIZE, /// block size
+                                              parameters, jacobians[BLOCK_INDEX]);
+    Eigen::Map<Eigen::Matrix<double, 3, 3, Eigen::RowMajor>> jacobian_3(
+        jacobians[BLOCK_INDEX]+9);
+    std::cout << "numdiff jacobian_3:\n"
+              << jacobian_3 << std::endl;
+  }
+
+  {
+    constexpr int BLOCK_INDEX = 2;
+    constexpr int BLOCK_SIZE = 4; // 扰动变量的维度
+    ceres::internal::NumericDiff<
+        QuaternionCostFunctor, ceres::NumericDiffMethodType::CENTRAL, 6, 4, 3,
+        4, 3, 0, 0, 0, 0, 0, 0, BLOCK_INDEX,
+        BLOCK_SIZE>::EvaluateJacobianForParameterBlock(&functor, residuals,
+                                              ceres::NumericDiffOptions(),
+                                              6, /// residual num
+                                              BLOCK_INDEX, /// block index
+                                              BLOCK_SIZE, /// block size
+                                              parameters, jacobians[BLOCK_INDEX]);
+    // deltaQ to q_Il2_Ir
+    Eigen::Map<Eigen::Matrix<double, 3, 4, Eigen::RowMajor>> jacobian_4(
+        jacobians[BLOCK_INDEX]);
+    Eigen::Matrix<double, 4, 3, Eigen::RowMajor> global_to_local_1;
+    QuaternionCostFunctor::GlobalToLocal(parameters[2],
+                                         global_to_local_1.data());
+    std::cout << "numdiff jacobian_4:\n"
+              << 0.5 * jacobian_4 * global_to_local_1 << std::endl;
+    // deltaP to q_Il2_Ir
+    Eigen::Map<Eigen::Matrix<double, 3, 4, Eigen::RowMajor>> jacobian_5(
+        jacobians[BLOCK_INDEX]+12);
+    std::cout << "numdiff jacobian_5:\n"
+              << 0.5 * jacobian_5 * global_to_local_1 << std::endl;
+  }
+
+  {
+    // deltaP to p_Ir_Il2
+    constexpr int BLOCK_INDEX = 3;
+    constexpr int BLOCK_SIZE = 3; // 扰动变量的维度
+    ceres::internal::NumericDiff<
+        QuaternionCostFunctor, ceres::NumericDiffMethodType::CENTRAL, 6, 4, 3,
+        4, 3, 0, 0, 0, 0, 0, 0, BLOCK_INDEX,
+        BLOCK_SIZE>::EvaluateJacobianForParameterBlock(&functor, residuals,
+                                              ceres::NumericDiffOptions(),
+                                              6, /// residual num
+                                              BLOCK_INDEX, /// block index
+                                              BLOCK_SIZE, /// block size
+                                              parameters, jacobians[BLOCK_INDEX]);
+    Eigen::Map<Eigen::Matrix<double, 3, 3, Eigen::RowMajor>> jacobian_7(
+        jacobians[BLOCK_INDEX]+9);
+    std::cout << "numdiff jacobian_7:\n"
+              << jacobian_7 << std::endl;
+  }
+
+  {
+    std::cout << "------------analytic----------------------------\n";
+    functor.evaluateAnalytically(parameters[0], parameters[1], parameters[2], parameters[3],
                                  residuals, jacobians);
 
     Eigen::Map<Eigen::Matrix<double, 3, 4, Eigen::RowMajor>> jacobian_0(
         jacobians[0]);
     Eigen::Map<Eigen::Matrix<double, 3, 4, Eigen::RowMajor>> jacobian_1(
-        jacobians[1]);
+        jacobians[0]+12);
 
-    std::cout << "----------------------------------------\n";
+
+    Eigen::Map<Eigen::Matrix<double, 3, 3, Eigen::RowMajor>> jacobian_3(
+        jacobians[1]+9);
+
+
+    Eigen::Map<Eigen::Matrix<double, 3, 4, Eigen::RowMajor>> jacobian_4(
+        jacobians[2]);
+    Eigen::Map<Eigen::Matrix<double, 3, 4, Eigen::RowMajor>> jacobian_5(
+        jacobians[2]+12);
+
+
+    Eigen::Map<Eigen::Matrix<double, 3, 3, Eigen::RowMajor>> jacobian_7(
+        jacobians[3]+9);
+
     std::cout << "analytic jacobian_0:\n"
               << jacobian_0.block(0, 0, 3, 3) << std::endl;
     std::cout << "analytic jacobian_1:\n"
               << jacobian_1.block(0, 0, 3, 3) << std::endl;
+    std::cout << "analytic jacobian_3:\n"
+              << jacobian_3.block(0, 0, 3, 3) << std::endl;
+    std::cout << "analytic jacobian_4:\n"
+              << jacobian_4.block(0, 0, 3, 3) << std::endl;
+    std::cout << "analytic jacobian_5:\n"
+              << jacobian_5.block(0, 0, 3, 3) << std::endl;
+    std::cout << "analytic jacobian_7:\n"
+              << jacobian_7.block(0, 0, 3, 3) << std::endl;
   }
 
   return 0;
